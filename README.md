@@ -16,13 +16,12 @@ already-qualified company.
 - Gemini (Google AI Studio) primary / Groq fallback for extraction — `src/lib/ai.ts`
 - Cron-triggered scan via `POST /api/scan` (shared secret in `Authorization` header),
   intended to be called by a scheduled Make.com scenario
-- Nodemailer/Gmail for optional digest email — `src/lib/email.ts`
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in Supabase, Gemini/Groq, Gmail, and webhook secret values
+cp .env.example .env.local   # fill in Supabase, Gemini/Groq, and webhook secret values
 ```
 
 Run the SQL in `supabase/schema.sql` then `supabase/seed_investors.sql` against your
