@@ -4,6 +4,7 @@ create table if not exists investors (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   sectors text[] default '{}', -- optional: sector focus, informational only
+  region text, -- UK | EU | Global — informational only
   created_at timestamptz not null default now()
 );
 
