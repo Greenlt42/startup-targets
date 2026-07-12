@@ -17,11 +17,20 @@ export interface NewsSource {
 // - idea-london.co.uk: real, working sitewide RSS feed, but mostly evergreen
 //   accelerator/advice content with only occasional funding roundups — skipped for
 //   low signal-to-noise vs. the sources below.
+// - Silicon Canals: dropped 2026-07-12 after building the pipeline — spot-checked
+//   the 10 most recent feed items and 9 were unrelated lifestyle/psychology content
+//   (not tech/funding at all), just 1 tangentially about startup funding. The site's
+//   own tagline ("Technology, Politics, Mind") suggests this isn't a fluke; the feed
+//   is too diluted to be worth the AI extraction cost.
+//
+// Note on EU-Startups: its weekly aggregate "funding round-up" post is paywalled
+// (CLUB members only) in the RSS content — extraction will correctly return an
+// empty array for it. Not a problem: individual per-company funding articles from
+// the same feed are freely readable and are the more useful format anyway.
 export const NEWS_SOURCES: NewsSource[] = [
   { name: "Tech.eu", feedUrl: "https://tech.eu/feed/", region: "EU" },
   { name: "EU-Startups", feedUrl: "https://www.eu-startups.com/feed/", region: "EU" },
   { name: "UKTN", feedUrl: "https://www.uktech.news/feed", region: "UK" },
-  { name: "Silicon Canals", feedUrl: "https://siliconcanals.com/feed/", region: "EU" },
   // Global funding aggregator with structured fields (round, amount, investors,
   // sector, HQ) — not UK/EU-native, so rely on downstream HQ/sector/size filtering
   // to screen out non-matching regions and oversized rounds.
