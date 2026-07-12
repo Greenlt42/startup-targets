@@ -3,7 +3,10 @@ import Groq from "groq-sdk";
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 const GROQ_MODEL_8B = "llama-3.1-8b-instant";
-const GROQ_MODEL_GEMMA = "gemma2-9b-it";
+// gemma2-9b-it was decommissioned by Groq (confirmed via GET /openai/v1/models
+// on 2026-07-12) — gpt-oss-20b is its replacement in this tier: still cheaper
+// per-token than the 70b model, and its own separate rate-limit bucket.
+const GROQ_MODEL_20B = "openai/gpt-oss-20b";
 const GROQ_MODEL_70B = "llama-3.3-70b-versatile";
 
 let gemini: GoogleGenerativeAI | null = null;
@@ -42,7 +45,7 @@ async function callGroq(model: string, prompt: string): Promise<string> {
 // whenever that's fixed, but don't waste every call's latency on it first.
 const PROVIDERS: { name: string; call: (prompt: string) => Promise<string> }[] = [
   { name: `Groq (${GROQ_MODEL_8B})`, call: (prompt) => callGroq(GROQ_MODEL_8B, prompt) },
-  { name: `Groq (${GROQ_MODEL_GEMMA})`, call: (prompt) => callGroq(GROQ_MODEL_GEMMA, prompt) },
+  { name: `Groq (${GROQ_MODEL_20B})`, call: (prompt) => callGroq(GROQ_MODEL_20B, prompt) },
   { name: `Groq (${GROQ_MODEL_70B})`, call: (prompt) => callGroq(GROQ_MODEL_70B, prompt) },
   { name: "Gemini", call: callGemini },
 ];
