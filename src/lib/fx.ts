@@ -13,11 +13,16 @@ const USD_RATES: Record<string, number> = {
   PLN: 0.25,
 };
 
+// `amountInMillions` matches extract.ts's convention (the AI returns 5 for
+// "$5M", not 5000000). Returns the actual dollar amount, not millions — e.g.
+// convertToUsd(5, "USD") === 5_000_000 — so it's directly comparable against
+// a real-dollar threshold like MAX_ROUND_SIZE_USD in the scan route.
+//
 // Returns null for unrecognized currencies rather than guessing — callers
 // should treat null as "can't verify the round-size cap" and exclude the
 // deal, so an unrecognized currency never lets an oversized round slip through.
-export function convertToUsd(amount: number, currency: string): number | null {
+export function convertToUsd(amountInMillions: number, currency: string): number | null {
   const rate = USD_RATES[currency.toUpperCase()];
   if (rate == null) return null;
-  return amount * rate;
+  return amountInMillions * rate * 1_000_000;
 }

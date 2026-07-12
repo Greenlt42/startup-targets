@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const candidates = allArticles.filter((a) => a.publishedAt === null || a.publishedAt >= cutoff);
   stats.withinWindow = candidates.length;
 
-  const newArticles = await filterUnseenArticles(candidates);
+  const newArticles = await excludeAlreadySeen(candidates);
   stats.newArticles = newArticles.length;
 
   const matcher = await loadInvestorMatcher();
@@ -44,6 +44,11 @@ export async function POST(req: NextRequest) {
     try {
       const deals = await extractDeals(article);
       stats.dealsExtracted += deals.length;
+
+      // Only mark as seen once extraction has actually succeeded — marking
+      // it beforehand risks silently and permanently losing an article if
+      // extraction throws (rate limit, network error, interrupted run).
+      await markArticleSeen(article);
 
       for (const deal of deals) {
         if (!deal.stage || !STAGES.includes(deal.stage)) continue;
@@ -92,28 +97,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const scannedAt = new Date().toISOString();
-  await supabase.from("scan_state").update({ last_scan_date: scannedAt }).eq("id", 1);
+  // Only advance the cutoff on a clean run. If anything errored, leave
+  // last_scan_date where it was — the next run will re-fetch the same
+  // window, but dedup (seen_articles) already skips everything that
+  // succeeded, so only the articles that actually failed get retried.
+  let scannedAt: string | null = null;
+  if (stats.errors.length === 0) {
+    scannedAt = new Date().toISOString();
+    await supabase.from("scan_state").update({ last_scan_date: scannedAt }).eq("id", 1);
+  }
 
   return NextResponse.json({ ok: true, previousScanDate: state?.last_scan_date ?? null, scannedAt, stats });
 }
 
-// Bulk-inserts article URLs into seen_articles (on-conflict-do-nothing) and
-// returns only the articles whose URL was newly inserted — i.e. not
-// previously processed by an earlier scan run.
-async function filterUnseenArticles(articles: Article[]): Promise<Article[]> {
+// Returns only the articles NOT already present in seen_articles.
+async function excludeAlreadySeen(articles: Article[]): Promise<Article[]> {
   if (articles.length === 0) return [];
 
   const { data, error } = await supabase
     .from("seen_articles")
-    .upsert(
-      articles.map((a) => ({ url: a.url, source: a.sourceName, published_at: a.publishedAt })),
-      { onConflict: "url", ignoreDuplicates: true }
-    )
-    .select("url");
+    .select("url")
+    .in("url", articles.map((a) => a.url));
 
   if (error) throw error;
 
-  const newUrls = new Set((data ?? []).map((row) => row.url as string));
-  return articles.filter((a) => newUrls.has(a.url));
+  const seenUrls = new Set((data ?? []).map((row) => row.url as string));
+  return articles.filter((a) => !seenUrls.has(a.url));
+}
+
+async function markArticleSeen(article: Article): Promise<void> {
+  const { error } = await supabase
+    .from("seen_articles")
+    .upsert({ url: article.url, source: article.sourceName, published_at: article.publishedAt }, { onConflict: "url", ignoreDuplicates: true });
+  if (error) throw error;
 }
