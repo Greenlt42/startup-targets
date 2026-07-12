@@ -51,3 +51,14 @@ create table if not exists targets (
 create index if not exists targets_status_idx on targets (status);
 create index if not exists targets_sector_idx on targets (sector);
 create index if not exists targets_round_date_idx on targets (round_date);
+
+-- RLS is enabled with no policies attached. The app only ever accesses these
+-- tables server-side via the service_role key (src/lib/supabase.ts), which
+-- bypasses RLS regardless of policies — so this doesn't change how the app
+-- works. What it does do: lock out the anon/authenticated roles entirely,
+-- so these tables aren't silently exposed via Supabase's public REST API if
+-- the anon key ever ends up in client-side code or leaks some other way.
+alter table investors enable row level security;
+alter table scan_state enable row level security;
+alter table seen_articles enable row level security;
+alter table targets enable row level security;
