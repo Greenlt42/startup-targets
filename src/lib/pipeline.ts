@@ -24,6 +24,7 @@ export interface ScanStats {
     unrecognizedCurrency: number; // currency not in our FX table
     roundTooLarge: number; // over the $50M cap
     noDate: number; // couldn't determine a round_date at all
+    duplicateAcrossSources: number; // same company (case-insensitive) + a round_date within days, different source
   };
   errors: string[];
 }
@@ -40,9 +41,36 @@ export function newScanStats(): ScanStats {
       unrecognizedCurrency: 0,
       roundTooLarge: 0,
       noDate: 0,
+      duplicateAcrossSources: 0,
     },
     errors: [],
   };
+}
+
+// Different sources often cover the same real-world round with slightly
+// different company-name capitalization or a round_date off by a day or two
+// — the DB's exact-match unique constraint (company_name, round_date) won't
+// catch that. Confirmed live: "TRIMTECH Therapeutics" vs "Trimtech
+// Therapeutics" (same date, different case) and "Astral Systems" reported a
+// day apart by two sources both slipped through as separate rows. Check
+// case-insensitively within a tolerance window before inserting.
+const DUPLICATE_DATE_TOLERANCE_DAYS = 7;
+
+async function hasDuplicateTarget(companyName: string, roundDate: string): Promise<boolean> {
+  const date = new Date(`${roundDate}T00:00:00Z`);
+  const from = new Date(date.getTime() - DUPLICATE_DATE_TOLERANCE_DAYS * 86400000).toISOString().slice(0, 10);
+  const to = new Date(date.getTime() + DUPLICATE_DATE_TOLERANCE_DAYS * 86400000).toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
+    .from("targets")
+    .select("id")
+    .ilike("company_name", companyName)
+    .gte("round_date", from)
+    .lte("round_date", to)
+    .limit(1);
+
+  if (error) throw error;
+  return (data ?? []).length > 0;
 }
 
 const SEEN_CHECK_BATCH_SIZE = 100;
@@ -132,6 +160,11 @@ export async function processArticle(article: Article, matcher: InvestorMatcher,
       const roundDate = deal.roundDate ?? enriched.publishedAt?.toISOString().slice(0, 10) ?? null;
       if (!roundDate) {
         stats.rejections.noDate++;
+        continue;
+      }
+
+      if (await hasDuplicateTarget(deal.companyName, roundDate)) {
+        stats.rejections.duplicateAcrossSources++;
         continue;
       }
 
