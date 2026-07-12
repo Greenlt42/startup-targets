@@ -1,0 +1,25 @@
+name: Scan
+
+on:
+  schedule:
+    # Once daily at 06:00 UTC. Adjust as needed — a scan run only costs a
+    # few seconds of Actions minutes either way.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/scan
+        run: |
+          status=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST "${SCAN_URL}/api/scan" \
+            -H "Authorization: Bearer ${SCAN_WEBHOOK_SECRET}")
+          cat /tmp/response.txt
+          if [ "$status" -ge 300 ]; then
+            echo "Scan endpoint returned HTTP $status"
+            exit 1
+          fi
+        env:
+          SCAN_URL: ${{ vars.SCAN_URL }}
+          SCAN_WEBHOOK_SECRET: ${{ secrets.SCAN_WEBHOOK_SECRET }}
