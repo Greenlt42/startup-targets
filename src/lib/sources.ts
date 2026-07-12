@@ -27,6 +27,13 @@ export interface NewsSource {
 // (CLUB members only) in the RSS content — extraction will correctly return an
 // empty array for it. Not a problem: individual per-company funding articles from
 // the same feed are freely readable and are the more useful format anyway.
+//
+// Note on TechCrunch: its category feed only gives a ~100-char teaser per item
+// (no content:encoded), too thin for reliable extraction — feeds.ts fetches the
+// full article page as a fallback whenever RSS content is under ~400 chars.
+// Feed depth checked 2026-07-12: 20 items over ~15 days, much lower churn than
+// EU-Startups, so the 2-hourly cron comfortably covers it without tightening
+// further.
 export const NEWS_SOURCES: NewsSource[] = [
   { name: "Tech.eu", feedUrl: "https://tech.eu/feed/", region: "EU" },
   { name: "EU-Startups", feedUrl: "https://www.eu-startups.com/feed/", region: "EU" },
@@ -35,4 +42,5 @@ export const NEWS_SOURCES: NewsSource[] = [
   // sector, HQ) — not UK/EU-native, so rely on downstream HQ/sector/size filtering
   // to screen out non-matching regions and oversized rounds.
   { name: "ProjectStartups", feedUrl: "https://projectstartups.com/index.xml", region: "Global" },
+  { name: "TechCrunch", feedUrl: "https://techcrunch.com/category/fundraising/feed/", region: "Global" },
 ];

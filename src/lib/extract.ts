@@ -1,6 +1,6 @@
 import { generateText } from "./ai";
 
-export const SECTORS = ["deep tech", "climate", "defence", "energy", "biotech"] as const;
+export const SECTORS = ["deep tech", "climate", "defence", "energy", "biotech", "fintech", "health tech"] as const;
 export const STAGES = ["pre-seed", "seed", "series-a"] as const;
 
 export interface ExtractedDeal {
@@ -26,29 +26,34 @@ Return a JSON array with one object per distinct funding round found. Return
 an empty array [] if the article contains no funding announcement.
 
 Only include rounds where the company's core product or technology genuinely
-IS one of these five categories: "deep tech", "climate", "defence", "energy",
-"biotech". Being adjacent to, serving, or operating within one of these
-industries is NOT enough — the company's own product must be the deep tech /
-climate tech / defence tech / energy tech / biotech itself.
+IS one of these seven categories: "deep tech", "climate", "defence", "energy",
+"biotech", "fintech", "health tech". Being adjacent to, serving, or operating
+within one of these industries is NOT enough — the company's own product must
+be the deep tech / climate tech / defence tech / energy tech / biotech /
+fintech / health tech itself.
 
 For example: a company building carbon-capture hardware IS climate tech; a
 staffing agency, training program, consultancy, generic SaaS/CRM tool, or
-marketplace that merely serves the climate/energy/defence/biotech industry is
-NOT — skip those, even though the article may describe them as operating "in
-climate" or "in energy." When in doubt, ask: if you removed the industry
-buzzwords, would this still describe deep tech / climate / defence / energy /
-biotech engineering, science, or hardware — or does it describe generic
+marketplace that merely serves the climate/energy/defence/biotech/fintech/
+health industry is NOT — skip those, even though the article may describe
+them as operating "in climate" or "in fintech." A company processing payments
+or issuing embedded credit IS fintech; a company that merely accepts card
+payments to sell something else is not. A company building diagnostics,
+clinical software, or medical devices IS health tech; a generic wellness app
+or gym-booking marketplace is not. When in doubt, ask: if you removed the
+industry buzzwords, would this still describe engineering, science, hardware,
+or a regulated financial/clinical product — or does it describe generic
 software/services/workforce operations that happen to have that industry as a
 customer? If the latter, skip it.
 
-Skip rounds in unrelated sectors (e.g. consumer apps, fintech, martech)
+Skip rounds in unrelated sectors (e.g. consumer apps, martech, e-commerce)
 entirely — do not include them in the array.
 
 Each object must have exactly these fields:
 {
   "companyName": string,
   "website": string or null (only if a URL/domain is explicitly mentioned),
-  "sector": one of "deep tech" | "climate" | "defence" | "energy" | "biotech",
+  "sector": one of "deep tech" | "climate" | "defence" | "energy" | "biotech" | "fintech" | "health tech",
   "stage": one of "pre-seed" | "seed" | "series-a" | null (null if the article
     doesn't specify or it's a different stage, e.g. Series B or growth),
   "roundAmount": number or null (the numeric amount only, e.g. 5.25, not "£5.25M"),

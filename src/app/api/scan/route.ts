@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { fetchAllArticles, type Article } from "@/lib/feeds";
+import { fetchAllArticles, fetchFullArticleText, type Article } from "@/lib/feeds";
 import { extractDeals, STAGES } from "@/lib/extract";
 import { loadInvestorMatcher } from "@/lib/matchInvestors";
 import { convertToUsd } from "@/lib/fx";
@@ -8,6 +8,10 @@ import { convertToUsd } from "@/lib/fx";
 const MAX_ROUND_SIZE_USD = 50_000_000;
 const MAX_HEADCOUNT = 60;
 const FIRST_RUN_LOOKBACK_DAYS = 60;
+// Below this, an RSS item's title+body is too thin for reliable extraction
+// (e.g. TechCrunch's feed gives ~100-char teasers with no content:encoded) —
+// worth the extra request to fetch the full article page instead.
+const MIN_TEXT_LENGTH_BEFORE_FULL_FETCH = 400;
 
 // 60s is the max Vercel allows on the Hobby plan (Pro allows up to 300s).
 // Real runs have taken well over this when processing a large backlog (e.g.
@@ -82,9 +86,14 @@ async function runScan(): Promise<NextResponse> {
 
   const matcher = await loadInvestorMatcher();
 
-  for (const article of newArticles) {
+  for (let article of newArticles) {
     let articleClean = true;
     try {
+      if (article.text.length < MIN_TEXT_LENGTH_BEFORE_FULL_FETCH) {
+        const fullText = await fetchFullArticleText(article.url);
+        if (fullText) article = { ...article, text: fullText };
+      }
+
       const deals = await extractDeals(article);
       stats.dealsExtracted += deals.length;
 

@@ -17,6 +17,8 @@
   --sector-energy: #eda100; /* yellow */
   --sector-climate: #008300; /* green */
   --sector-defence: #4a3aa7; /* violet */
+  --sector-fintech: #e87ba4; /* magenta */
+  --sector-health-tech: #eb6834; /* orange */
 
   /* status — reserved, workflow state (not severity) */
   --status-good: #0ca30c; /* contacted */
@@ -39,6 +41,8 @@
     --sector-energy: #c98500;
     --sector-climate: #008300;
     --sector-defence: #9085e9;
+    --sector-fintech: #d55181;
+    --sector-health-tech: #d95926;
 
     --status-good: #0ca30c;
     --status-muted: #898781;
