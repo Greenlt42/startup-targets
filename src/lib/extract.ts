@@ -25,10 +25,24 @@ funding round at all (e.g. opinion pieces, general startup-ecosystem advice).
 Return a JSON array with one object per distinct funding round found. Return
 an empty array [] if the article contains no funding announcement.
 
-Only include rounds where the company's sector plausibly fits one of these
-five categories: "deep tech", "climate", "defence", "energy", "biotech". Skip
-rounds in unrelated sectors (e.g. consumer apps, fintech, martech) entirely —
-do not include them in the array.
+Only include rounds where the company's core product or technology genuinely
+IS one of these five categories: "deep tech", "climate", "defence", "energy",
+"biotech". Being adjacent to, serving, or operating within one of these
+industries is NOT enough — the company's own product must be the deep tech /
+climate tech / defence tech / energy tech / biotech itself.
+
+For example: a company building carbon-capture hardware IS climate tech; a
+staffing agency, training program, consultancy, generic SaaS/CRM tool, or
+marketplace that merely serves the climate/energy/defence/biotech industry is
+NOT — skip those, even though the article may describe them as operating "in
+climate" or "in energy." When in doubt, ask: if you removed the industry
+buzzwords, would this still describe deep tech / climate / defence / energy /
+biotech engineering, science, or hardware — or does it describe generic
+software/services/workforce operations that happen to have that industry as a
+customer? If the latter, skip it.
+
+Skip rounds in unrelated sectors (e.g. consumer apps, fintech, martech)
+entirely — do not include them in the array.
 
 Each object must have exactly these fields:
 {
