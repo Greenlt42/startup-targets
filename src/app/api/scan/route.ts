@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// Triggered by a scheduled Make.com scenario hitting this route with a shared secret.
+// Triggered by a scheduled GitHub Actions workflow (.github/workflows/scan.yml)
+// hitting this route with a shared secret.
 // Pipeline (to implement): fetch RSS feeds -> dedup against seen_articles ->
 // AI-extract structured fields -> filter against criteria + investors table -> upsert targets.
 export async function POST(req: NextRequest) {

@@ -17,7 +17,7 @@ already-qualified company.
   feed is bot-blocked and excluded)
 - Gemini (Google AI Studio) primary / Groq fallback for extraction — `src/lib/ai.ts`
 - Cron-triggered scan via `POST /api/scan` (shared secret in `Authorization` header),
-  intended to be called by a scheduled Make.com scenario
+  triggered daily by a GitHub Actions workflow — `.github/workflows/scan.yml`
 
 ## Setup
 
@@ -33,6 +33,18 @@ top-tier VC list.
 ```bash
 npm run dev
 ```
+
+### Cron
+
+`.github/workflows/scan.yml` calls `POST /api/scan` once a day via GitHub Actions
+(free — a scan run only costs a few seconds of Actions minutes). Once the app is
+deployed, set these in the repo's Settings → Secrets and variables → Actions:
+
+- **Secret** `SCAN_WEBHOOK_SECRET` — same value as `SCAN_WEBHOOK_SECRET` in `.env.local`
+- **Variable** `SCAN_URL` — the deployed app's base URL (e.g. `https://startup-targets.vercel.app`)
+
+You can also trigger a run manually from the Actions tab (`workflow_dispatch`) without
+waiting for the schedule.
 
 ## Status
 
