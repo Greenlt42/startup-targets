@@ -2,8 +2,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 
 const GEMINI_MODEL = "gemini-2.0-flash";
-const GROQ_MODEL_PRIMARY = "llama-3.3-70b-versatile";
-const GROQ_MODEL_SECONDARY = "llama-3.1-8b-instant";
+const GROQ_MODEL_8B = "llama-3.1-8b-instant";
+const GROQ_MODEL_GEMMA = "gemma2-9b-it";
+const GROQ_MODEL_70B = "llama-3.3-70b-versatile";
 
 let gemini: GoogleGenerativeAI | null = null;
 let groq: Groq | null = null;
@@ -32,13 +33,18 @@ async function callGroq(model: string, prompt: string): Promise<string> {
   return completion.choices[0]?.message?.content ?? "";
 }
 
-// Tried in order until one succeeds. Groq's rate/token limits are per-model,
-// not account-wide, so a second (smaller) Groq model gets its own separate
-// daily quota for free — cheap extra headroom before needing another provider.
+// Tried in order until one succeeds. Small models first: this is structured
+// extraction, not deep reasoning, so smaller models are plenty accurate for
+// it and get far higher free-tier throughput (Groq's limits are per-model,
+// not account-wide, so each one is a separate quota bucket). Gemini is last
+// since it's currently stuck at 0 free-tier quota (needs billing/API
+// enablement checked on the Google Cloud project) — keep it in the chain for
+// whenever that's fixed, but don't waste every call's latency on it first.
 const PROVIDERS: { name: string; call: (prompt: string) => Promise<string> }[] = [
+  { name: `Groq (${GROQ_MODEL_8B})`, call: (prompt) => callGroq(GROQ_MODEL_8B, prompt) },
+  { name: `Groq (${GROQ_MODEL_GEMMA})`, call: (prompt) => callGroq(GROQ_MODEL_GEMMA, prompt) },
+  { name: `Groq (${GROQ_MODEL_70B})`, call: (prompt) => callGroq(GROQ_MODEL_70B, prompt) },
   { name: "Gemini", call: callGemini },
-  { name: `Groq (${GROQ_MODEL_PRIMARY})`, call: (prompt) => callGroq(GROQ_MODEL_PRIMARY, prompt) },
-  { name: `Groq (${GROQ_MODEL_SECONDARY})`, call: (prompt) => callGroq(GROQ_MODEL_SECONDARY, prompt) },
 ];
 
 export async function generateText(prompt: string): Promise<string> {

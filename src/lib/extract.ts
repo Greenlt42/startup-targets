@@ -59,9 +59,43 @@ Article (source: {{SOURCE}}, published: {{PUBLISHED}}):
 {{ARTICLE}}
 ---`;
 
+// Smaller models occasionally emit non-standard JSON — inline `//` comments
+// (seen from llama-3.1-8b-instant) or a trailing comma before a closing
+// bracket. Strips both, respecting string boundaries so a `//` inside a URL
+// value (e.g. "https://example.com") isn't mistaken for a comment.
+function stripJsonComments(s: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch === "/" && s[i + 1] === "/") {
+      while (i < s.length && s[i] !== "\n") i++;
+    } else if (ch === "/" && s[i + 1] === "*") {
+      i += 2;
+      while (i < s.length && !(s[i] === "*" && s[i + 1] === "/")) i++;
+      i++;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
 function parseJsonArray(raw: string): unknown[] {
   const trimmed = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  const parsed = JSON.parse(trimmed);
+  const cleaned = stripJsonComments(trimmed).replace(/,(\s*[\]}])/g, "$1");
+  const parsed = JSON.parse(cleaned);
   if (!Array.isArray(parsed)) throw new Error("Expected a JSON array");
   return parsed;
 }
