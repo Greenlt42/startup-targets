@@ -9,6 +9,14 @@ const MAX_ROUND_SIZE_USD = 50_000_000;
 const MAX_HEADCOUNT = 60;
 const FIRST_RUN_LOOKBACK_DAYS = 60;
 
+// 60s is the max Vercel allows on the Hobby plan (Pro allows up to 300s).
+// Real runs have taken well over this when processing a large backlog (e.g.
+// the initial catch-up, or a day with heavy AI-provider fallback) — that
+// first big run should be triggered manually against production rather than
+// relying on cron, so it isn't silently killed mid-scan. Steady-state daily
+// runs (a handful of new articles) should comfortably fit in 60s.
+export const maxDuration = 60;
+
 // Triggered by a scheduled GitHub Actions workflow (.github/workflows/scan.yml)
 // hitting this route with a shared secret.
 export async function POST(req: NextRequest) {
