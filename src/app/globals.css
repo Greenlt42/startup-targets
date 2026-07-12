@@ -3,25 +3,50 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --page-plane: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --border: rgba(11, 11, 11, 0.1);
+
+  /* categorical — sector badges, fixed assignment, never cycled */
+  --sector-deep-tech: #2a78d6; /* blue */
+  --sector-biotech: #1baf7a; /* aqua */
+  --sector-energy: #eda100; /* yellow */
+  --sector-climate: #008300; /* green */
+  --sector-defence: #4a3aa7; /* violet */
+
+  /* status — reserved, workflow state (not severity) */
+  --status-good: #0ca30c; /* contacted */
+  --status-muted: #898781; /* dismissed */
+  --status-accent: #2a78d6; /* new */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --page-plane: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.1);
+
+    --sector-deep-tech: #3987e5;
+    --sector-biotech: #199e70;
+    --sector-energy: #c98500;
+    --sector-climate: #008300;
+    --sector-defence: #9085e9;
+
+    --status-good: #0ca30c;
+    --status-muted: #898781;
+    --status-accent: #3987e5;
   }
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  color: var(--text-primary);
+  background: var(--page-plane);
 }
