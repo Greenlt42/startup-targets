@@ -47,3 +47,57 @@ insert into investors (name, sectors, region) values
   ('Novo Holdings', array['biotech'], 'EU'),
   ('Seventure Partners', array['biotech'], 'EU')
 on conflict (name) do nothing;
+
+-- Funds surfaced via LP/fund-of-funds research (2026-07-12): several firms
+-- above don't just invest directly — they also act as LPs into other VC
+-- funds. Backing from those downstream funds is still a real quality signal,
+-- so they're captured here too. Researched via web search on 2026-07-12;
+-- re-verify periodically as LP relationships change.
+--
+-- Of the 35 firms above, only these were confirmed LP/fund-of-funds
+-- investors (the other 29 are direct-only): Atomico, Speedinvest, Molten
+-- Ventures, Extantia Capital, NATO Innovation Fund, Novo Holdings.
+-- Speedinvest's fund-of-funds commitments (an unnamed "Fund F" and one other
+-- unnamed fund, both aimed at Latin America/Africa) were excluded — no
+-- concrete fund names, and the geographic mandate doesn't fit UK/EU sourcing.
+-- Six downstream funds were already on the list above (Seedcamp, OTB
+-- Ventures, Join Capital, Vsquared Ventures, 2150, Zero Carbon Capital) —
+-- a good cross-validation signal, not re-inserted here.
+
+insert into investors (name, sectors, region) values
+  -- via Atomico's fund-of-funds programme
+  ('Visionaries Club', array[]::text[], 'EU'),
+  ('Puzzle Ventures', array[]::text[], 'EU'),
+  ('Common Magic', array[]::text[], 'EU'),
+  ('Tiny VC', array[]::text[], 'UK'),
+  ('Ada Ventures', array[]::text[], 'UK'),
+  ('Cornerstone VC', array[]::text[], 'UK'),
+  ('Unconventional Ventures', array[]::text[], 'EU'),
+  ('Pale Blue Dot', array['climate'], 'EU'),
+  ('Firstminute Capital', array[]::text[], 'UK'),
+  -- via Molten Ventures' "Backing Europe's best seed funds" programme
+  ('Connect Ventures', array[]::text[], 'UK'),
+  ('Earlybird Digital East', array[]::text[], 'EU'),
+  ('Eka Ventures', array['climate'], 'UK'),
+  ('Moonfire', array[]::text[], 'UK'),
+  -- via Extantia Capital's "Extantia Allstars" fund-of-funds
+  ('Astanor', array['climate'], 'EU'),
+  ('Lowercarbon Capital', array['climate','energy'], 'Global'),
+  ('Fifth Wall', array['climate'], 'Global'),
+  ('Energy Impact Partners', array['energy','climate'], 'Global'),
+  ('Just Climate', array['climate'], 'UK'),
+  ('Counteract', array['climate'], 'EU'),
+  -- via NATO Innovation Fund's fund-of-funds programme
+  ('Alpine Space Ventures', array['deep tech'], 'EU'),
+  ('Faber', array['deep tech'], 'EU'),
+  ('BSV Ventures', array['deep tech','biotech','defence'], 'EU'),
+  ('201 Ventures', array['defence','deep tech'], 'EU'),
+  ('Expeditions', array['defence'], 'EU'),
+  ('Twin Track Ventures', array['deep tech'], 'EU'),
+  -- via Novo Holdings' quantum-tech + life-science fund commitments
+  ('Sunstone Life Science Ventures Fund IV', array['biotech'], 'EU'),
+  ('BioGeneration Ventures IV', array['biotech'], 'EU'),
+  ('55 North', array['deep tech'], 'EU'),
+  ('Quantonation II', array['deep tech'], 'EU'),
+  ('Playground Global IV', array['deep tech'], 'Global')
+on conflict (name) do nothing;
