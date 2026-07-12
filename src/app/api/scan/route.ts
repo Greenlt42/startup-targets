@@ -17,6 +17,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try {
+    return await runScan();
+  } catch (err) {
+    // Belt-and-braces: nothing above should throw uncaught (per-article
+    // extraction/upsert errors are already caught individually), but if
+    // something unexpected does escape, return it as JSON instead of
+    // crashing into an opaque 500 with no diagnostic info.
+    console.error("Scan failed:", err);
+    return NextResponse.json(
+      { ok: false, error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
+}
+
+async function runScan(): Promise<NextResponse> {
   const { data: state } = await supabase
     .from("scan_state")
     .select("last_scan_date")
