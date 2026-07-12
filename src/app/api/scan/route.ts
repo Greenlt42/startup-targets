@@ -51,7 +51,25 @@ async function runScan(): Promise<NextResponse> {
     ? new Date(state.last_scan_date)
     : new Date(Date.now() - FIRST_RUN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
-  const stats = { fetched: 0, withinWindow: 0, newArticles: 0, dealsExtracted: 0, targetsUpserted: 0, errors: [] as string[] };
+  const stats = {
+    fetched: 0,
+    withinWindow: 0,
+    newArticles: 0,
+    dealsExtracted: 0,
+    targetsUpserted: 0,
+    // Why an extracted deal didn't become a target — visibility into the
+    // filter funnel so recall issues can be diagnosed instead of guessed at.
+    rejections: {
+      badStage: 0, // no stage, or not pre-seed/seed/series-a
+      noInvestorMatch: 0, // none of the deal's investors are on the allowlist
+      headcountTooHigh: 0,
+      noCurrencyForStatedAmount: 0, // amount given but currency missing
+      unrecognizedCurrency: 0, // currency not in our FX table
+      roundTooLarge: 0, // over the $50M cap
+      noDate: 0, // couldn't determine a round_date at all
+    },
+    errors: [] as string[],
+  };
 
   const allArticles = await fetchAllArticles();
   stats.fetched = allArticles.length;
@@ -71,23 +89,44 @@ async function runScan(): Promise<NextResponse> {
       stats.dealsExtracted += deals.length;
 
       for (const deal of deals) {
-        if (!deal.stage || !STAGES.includes(deal.stage)) continue;
+        if (!deal.stage || !STAGES.includes(deal.stage)) {
+          stats.rejections.badStage++;
+          continue;
+        }
 
         const matchedInvestor = matcher.match(deal.investors);
-        if (!matchedInvestor) continue;
+        if (!matchedInvestor) {
+          stats.rejections.noInvestorMatch++;
+          continue;
+        }
 
-        if (deal.headcount !== null && deal.headcount > MAX_HEADCOUNT) continue;
+        if (deal.headcount !== null && deal.headcount > MAX_HEADCOUNT) {
+          stats.rejections.headcountTooHigh++;
+          continue;
+        }
 
         let roundSizeUsd: number | null = null;
         if (deal.roundAmount !== null) {
-          if (!deal.roundCurrency) continue; // stated amount but no currency — can't verify the cap, skip
+          if (!deal.roundCurrency) {
+            stats.rejections.noCurrencyForStatedAmount++;
+            continue;
+          }
           roundSizeUsd = convertToUsd(deal.roundAmount, deal.roundCurrency);
-          if (roundSizeUsd === null) continue; // unrecognized currency — can't verify the cap, skip
-          if (roundSizeUsd > MAX_ROUND_SIZE_USD) continue;
+          if (roundSizeUsd === null) {
+            stats.rejections.unrecognizedCurrency++;
+            continue;
+          }
+          if (roundSizeUsd > MAX_ROUND_SIZE_USD) {
+            stats.rejections.roundTooLarge++;
+            continue;
+          }
         }
 
         const roundDate = deal.roundDate ?? article.publishedAt?.toISOString().slice(0, 10) ?? null;
-        if (!roundDate) continue; // no date at all — needed for dedup, skip
+        if (!roundDate) {
+          stats.rejections.noDate++;
+          continue;
+        }
 
         const { error } = await supabase.from("targets").upsert(
           {

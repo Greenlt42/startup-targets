@@ -2,9 +2,13 @@ name: Scan
 
 on:
   schedule:
-    # Once daily at 06:00 UTC. Adjust as needed — a scan run only costs a
-    # few seconds of Actions minutes either way.
-    - cron: "0 6 * * *"
+    # Every 2 hours. EU-Startups alone publishes ~8 articles/day into a feed
+    # that only exposes the 10 most recent items — on a busy day the visible
+    # window can be under 24h, so a daily cron was silently missing articles
+    # that scrolled out between runs (confirmed: this is how we missed the
+    # Axle Energy round on 2026-07-12). A no-op run costs a few seconds of
+    # Actions minutes, so scanning this often is effectively free.
+    - cron: "0 */2 * * *"
   workflow_dispatch: {}
 
 jobs:
