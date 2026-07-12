@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { fetchAllArticles, type Article } from "@/lib/feeds";
+import { extractDeals, STAGES } from "@/lib/extract";
+import { loadInvestorMatcher } from "@/lib/matchInvestors";
+import { convertToUsd } from "@/lib/fx";
+
+const MAX_ROUND_SIZE_USD = 50_000_000;
+const MAX_HEADCOUNT = 60;
+const FIRST_RUN_LOOKBACK_DAYS = 60;
 
 // Triggered by a scheduled GitHub Actions workflow (.github/workflows/scan.yml)
 // hitting this route with a shared secret.
-// Pipeline (to implement): fetch RSS feeds -> dedup against seen_articles ->
-// AI-extract structured fields -> filter against criteria + investors table -> upsert targets.
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.SCAN_WEBHOOK_SECRET}`) {
@@ -17,13 +23,97 @@ export async function POST(req: NextRequest) {
     .eq("id", 1)
     .single();
 
-  // TODO: fetch feeds, extract, filter, upsert targets.
+  const cutoff = state?.last_scan_date
+    ? new Date(state.last_scan_date)
+    : new Date(Date.now() - FIRST_RUN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+
+  const stats = { fetched: 0, withinWindow: 0, newArticles: 0, dealsExtracted: 0, targetsUpserted: 0, errors: [] as string[] };
+
+  const allArticles = await fetchAllArticles();
+  stats.fetched = allArticles.length;
+
+  const candidates = allArticles.filter((a) => a.publishedAt === null || a.publishedAt >= cutoff);
+  stats.withinWindow = candidates.length;
+
+  const newArticles = await filterUnseenArticles(candidates);
+  stats.newArticles = newArticles.length;
+
+  const matcher = await loadInvestorMatcher();
+
+  for (const article of newArticles) {
+    try {
+      const deals = await extractDeals(article);
+      stats.dealsExtracted += deals.length;
+
+      for (const deal of deals) {
+        if (!deal.stage || !STAGES.includes(deal.stage)) continue;
+
+        const matchedInvestor = matcher.match(deal.investors);
+        if (!matchedInvestor) continue;
+
+        if (deal.headcount !== null && deal.headcount > MAX_HEADCOUNT) continue;
+
+        let roundSizeUsd: number | null = null;
+        if (deal.roundAmount !== null) {
+          if (!deal.roundCurrency) continue; // stated amount but no currency — can't verify the cap, skip
+          roundSizeUsd = convertToUsd(deal.roundAmount, deal.roundCurrency);
+          if (roundSizeUsd === null) continue; // unrecognized currency — can't verify the cap, skip
+          if (roundSizeUsd > MAX_ROUND_SIZE_USD) continue;
+        }
+
+        const roundDate = deal.roundDate ?? article.publishedAt?.toISOString().slice(0, 10) ?? null;
+        if (!roundDate) continue; // no date at all — needed for dedup, skip
+
+        const { error } = await supabase.from("targets").upsert(
+          {
+            company_name: deal.companyName,
+            website: deal.website,
+            sector: deal.sector,
+            stage: deal.stage,
+            round_size_usd: roundSizeUsd,
+            round_date: roundDate,
+            investors: deal.investors,
+            headcount: deal.headcount,
+            source_url: article.url,
+            source_name: article.sourceName,
+            summary: deal.summary,
+          },
+          { onConflict: "company_name,round_date", ignoreDuplicates: true }
+        );
+
+        if (error) {
+          stats.errors.push(`Upsert failed for ${deal.companyName}: ${error.message}`);
+        } else {
+          stats.targetsUpserted++;
+        }
+      }
+    } catch (err) {
+      stats.errors.push(`Extraction failed for ${article.url}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   const scannedAt = new Date().toISOString();
+  await supabase.from("scan_state").update({ last_scan_date: scannedAt }).eq("id", 1);
 
-  await supabase
-    .from("scan_state")
-    .update({ last_scan_date: scannedAt })
-    .eq("id", 1);
+  return NextResponse.json({ ok: true, previousScanDate: state?.last_scan_date ?? null, scannedAt, stats });
+}
 
-  return NextResponse.json({ ok: true, previousScanDate: state?.last_scan_date ?? null, scannedAt });
+// Bulk-inserts article URLs into seen_articles (on-conflict-do-nothing) and
+// returns only the articles whose URL was newly inserted — i.e. not
+// previously processed by an earlier scan run.
+async function filterUnseenArticles(articles: Article[]): Promise<Article[]> {
+  if (articles.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("seen_articles")
+    .upsert(
+      articles.map((a) => ({ url: a.url, source: a.sourceName, published_at: a.publishedAt })),
+      { onConflict: "url", ignoreDuplicates: true }
+    )
+    .select("url");
+
+  if (error) throw error;
+
+  const newUrls = new Set((data ?? []).map((row) => row.url as string));
+  return articles.filter((a) => newUrls.has(a.url));
 }
