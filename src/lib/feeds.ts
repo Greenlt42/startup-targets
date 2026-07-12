@@ -4,12 +4,19 @@ import { NEWS_SOURCES } from "./sources";
 
 const FETCH_HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" };
 
-// Common WordPress/news-site main-content container selectors, tried in
-// order. Some sources (e.g. TechCrunch) only publish a one-line teaser via
-// RSS with no content:encoded — this fetches the full article page as a
-// fallback so extraction has enough text to work with. Returns null if the
-// page can't be fetched (bot-blocked, 404, etc.) or no selector matches;
+// Common WordPress/news-site main-content container selectors. Some sources
+// (e.g. TechCrunch) only publish a one-line teaser via RSS with no
+// content:encoded — this fetches the full article page as a fallback so
+// extraction has enough text to work with. Returns null if the page can't
+// be fetched (bot-blocked, 404, etc.) or nothing substantial matches;
 // callers should fall back to the RSS-derived text in that case.
+//
+// Takes the LONGEST match across every selector and every matching element,
+// not the first hit — confirmed live on UKTN that `article:first()` grabs a
+// 40-char login widget (the site has ~15 `<article>` tags, mostly related-
+// post cards) while `main` holds the real ~1500-char body. Picking the
+// longest candidate is robust to a site's real content container not being
+// whichever selector happens to match first.
 const CONTENT_SELECTORS = ["article", ".entry-content", ".post-content", ".article-content", ".article-body", "main"];
 
 export async function fetchFullArticleText(url: string): Promise<string | null> {
@@ -20,12 +27,14 @@ export async function fetchFullArticleText(url: string): Promise<string | null> 
     const $ = cheerio.load(html);
     $("script, style, nav, header, footer, aside, .ad, .advertisement").remove();
 
+    let best = "";
     for (const selector of CONTENT_SELECTORS) {
-      const el = $(selector).first();
-      const text = el.text().replace(/\s+/g, " ").trim();
-      if (text.length > 200) return text;
+      $(selector).each((_, el) => {
+        const text = $(el).text().replace(/\s+/g, " ").trim();
+        if (text.length > best.length) best = text;
+      });
     }
-    return null;
+    return best.length > 200 ? best : null;
   } catch (err) {
     console.error(`Failed to fetch full article text for ${url}:`, err instanceof Error ? err.message : err);
     return null;
