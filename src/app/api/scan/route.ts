@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { fetchAllArticles, fetchFullArticleText, type Article } from "@/lib/feeds";
-import { extractDeals, STAGES } from "@/lib/extract";
+import { fetchAllArticles } from "@/lib/feeds";
 import { loadInvestorMatcher } from "@/lib/matchInvestors";
-import { convertToUsd } from "@/lib/fx";
+import { newScanStats, excludeAlreadySeen, processArticle } from "@/lib/pipeline";
 
-const MAX_ROUND_SIZE_USD = 50_000_000;
-const MAX_HEADCOUNT = 60;
 const FIRST_RUN_LOOKBACK_DAYS = 60;
-// Below this, an RSS item's title+body is too thin for reliable extraction
-// (e.g. TechCrunch's feed gives ~100-char teasers with no content:encoded) —
-// worth the extra request to fetch the full article page instead.
-const MIN_TEXT_LENGTH_BEFORE_FULL_FETCH = 400;
 
 // 60s is the max Vercel allows on the Hobby plan (Pro allows up to 300s).
 // Real runs have taken well over this when processing a large backlog (e.g.
@@ -55,25 +48,7 @@ async function runScan(): Promise<NextResponse> {
     ? new Date(state.last_scan_date)
     : new Date(Date.now() - FIRST_RUN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
-  const stats = {
-    fetched: 0,
-    withinWindow: 0,
-    newArticles: 0,
-    dealsExtracted: 0,
-    targetsUpserted: 0,
-    // Why an extracted deal didn't become a target — visibility into the
-    // filter funnel so recall issues can be diagnosed instead of guessed at.
-    rejections: {
-      badStage: 0, // no stage, or not pre-seed/seed/series-a
-      noInvestorMatch: 0, // none of the deal's investors are on the allowlist
-      headcountTooHigh: 0,
-      noCurrencyForStatedAmount: 0, // amount given but currency missing
-      unrecognizedCurrency: 0, // currency not in our FX table
-      roundTooLarge: 0, // over the $50M cap
-      noDate: 0, // couldn't determine a round_date at all
-    },
-    errors: [] as string[],
-  };
+  const stats = { fetched: 0, withinWindow: 0, newArticles: 0, ...newScanStats() };
 
   const allArticles = await fetchAllArticles();
   stats.fetched = allArticles.length;
@@ -86,90 +61,8 @@ async function runScan(): Promise<NextResponse> {
 
   const matcher = await loadInvestorMatcher();
 
-  for (let article of newArticles) {
-    let articleClean = true;
-    try {
-      if (article.text.length < MIN_TEXT_LENGTH_BEFORE_FULL_FETCH) {
-        const fullText = await fetchFullArticleText(article.url);
-        if (fullText) article = { ...article, text: fullText };
-      }
-
-      const deals = await extractDeals(article);
-      stats.dealsExtracted += deals.length;
-
-      for (const deal of deals) {
-        if (!deal.stage || !STAGES.includes(deal.stage)) {
-          stats.rejections.badStage++;
-          continue;
-        }
-
-        const matchedInvestor = matcher.match(deal.investors);
-        if (!matchedInvestor) {
-          stats.rejections.noInvestorMatch++;
-          continue;
-        }
-
-        if (deal.headcount !== null && deal.headcount > MAX_HEADCOUNT) {
-          stats.rejections.headcountTooHigh++;
-          continue;
-        }
-
-        let roundSizeUsd: number | null = null;
-        if (deal.roundAmount !== null) {
-          if (!deal.roundCurrency) {
-            stats.rejections.noCurrencyForStatedAmount++;
-            continue;
-          }
-          roundSizeUsd = convertToUsd(deal.roundAmount, deal.roundCurrency);
-          if (roundSizeUsd === null) {
-            stats.rejections.unrecognizedCurrency++;
-            continue;
-          }
-          if (roundSizeUsd > MAX_ROUND_SIZE_USD) {
-            stats.rejections.roundTooLarge++;
-            continue;
-          }
-        }
-
-        const roundDate = deal.roundDate ?? article.publishedAt?.toISOString().slice(0, 10) ?? null;
-        if (!roundDate) {
-          stats.rejections.noDate++;
-          continue;
-        }
-
-        const { error } = await supabase.from("targets").upsert(
-          {
-            company_name: deal.companyName,
-            website: deal.website,
-            sector: deal.sector,
-            stage: deal.stage,
-            round_size_usd: roundSizeUsd,
-            round_date: roundDate,
-            investors: deal.investors,
-            headcount: deal.headcount,
-            source_url: article.url,
-            source_name: article.sourceName,
-            summary: deal.summary,
-          },
-          { onConflict: "company_name,round_date", ignoreDuplicates: true }
-        );
-
-        if (error) {
-          stats.errors.push(`Upsert failed for ${deal.companyName}: ${error.message}`);
-          articleClean = false;
-        } else {
-          stats.targetsUpserted++;
-        }
-      }
-
-      // Only mark as seen once every deal in the article was actually saved
-      // — an article with a partial failure (e.g. one deal's upsert errors)
-      // needs to stay eligible for retry, since ignoreDuplicates makes
-      // re-processing the deals that already succeeded a safe no-op.
-      if (articleClean) await markArticleSeen(article);
-    } catch (err) {
-      stats.errors.push(`Extraction failed for ${article.url}: ${err instanceof Error ? err.message : String(err)}`);
-    }
+  for (const article of newArticles) {
+    await processArticle(article, matcher, stats);
   }
 
   // Only advance the cutoff on a clean run. If anything errored, leave
@@ -183,26 +76,4 @@ async function runScan(): Promise<NextResponse> {
   }
 
   return NextResponse.json({ ok: true, previousScanDate: state?.last_scan_date ?? null, scannedAt, stats });
-}
-
-// Returns only the articles NOT already present in seen_articles.
-async function excludeAlreadySeen(articles: Article[]): Promise<Article[]> {
-  if (articles.length === 0) return [];
-
-  const { data, error } = await supabase
-    .from("seen_articles")
-    .select("url")
-    .in("url", articles.map((a) => a.url));
-
-  if (error) throw error;
-
-  const seenUrls = new Set((data ?? []).map((row) => row.url as string));
-  return articles.filter((a) => !seenUrls.has(a.url));
-}
-
-async function markArticleSeen(article: Article): Promise<void> {
-  const { error } = await supabase
-    .from("seen_articles")
-    .upsert({ url: article.url, source: article.sourceName, published_at: article.publishedAt }, { onConflict: "url", ignoreDuplicates: true });
-  if (error) throw error;
 }
