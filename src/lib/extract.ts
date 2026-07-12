@@ -100,6 +100,16 @@ function parseJsonArray(raw: string): unknown[] {
   return parsed;
 }
 
+// Smaller models sometimes emit the literal string "null" instead of the
+// JSON null value for optional fields — e.g. "roundDate": "null", which
+// would otherwise flow straight into a date column and fail at the DB.
+// Normalize any nullable-string field before validating/using it.
+function nullableString(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const trimmed = v.trim();
+  return trimmed === "" || trimmed.toLowerCase() === "null" ? null : trimmed;
+}
+
 function isValidDeal(d: unknown): d is ExtractedDeal {
   if (typeof d !== "object" || d === null) return false;
   const deal = d as Record<string, unknown>;
@@ -130,14 +140,31 @@ export async function extractDeals(
     return [];
   }
 
-  return parsed.filter(isValidDeal).map((d) => ({
+  // Normalize nullable-string fields (collapsing literal "null" strings to
+  // real null) before validation, so a stray "null" string on an optional
+  // field like sector/stage doesn't cause an otherwise-valid deal to be
+  // rejected wholesale.
+  const normalized = parsed.map((d) => {
+    if (typeof d !== "object" || d === null) return d;
+    const deal = d as Record<string, unknown>;
+    return {
+      ...deal,
+      sector: nullableString(deal.sector),
+      stage: nullableString(deal.stage),
+      website: nullableString(deal.website),
+      roundCurrency: nullableString(deal.roundCurrency),
+      roundDate: nullableString(deal.roundDate),
+    };
+  });
+
+  return normalized.filter(isValidDeal).map((d) => ({
     companyName: d.companyName.trim(),
-    website: d.website ?? null,
+    website: d.website,
     sector: d.sector,
     stage: d.stage,
     roundAmount: typeof d.roundAmount === "number" ? d.roundAmount : null,
-    roundCurrency: d.roundCurrency ?? null,
-    roundDate: d.roundDate ?? null,
+    roundCurrency: d.roundCurrency,
+    roundDate: d.roundDate,
     investors: d.investors.filter((i): i is string => typeof i === "string"),
     headcount: typeof d.headcount === "number" ? d.headcount : null,
     summary: typeof d.summary === "string" ? d.summary : "",
