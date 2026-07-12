@@ -57,14 +57,10 @@ async function runScan(): Promise<NextResponse> {
   const matcher = await loadInvestorMatcher();
 
   for (const article of newArticles) {
+    let articleClean = true;
     try {
       const deals = await extractDeals(article);
       stats.dealsExtracted += deals.length;
-
-      // Only mark as seen once extraction has actually succeeded — marking
-      // it beforehand risks silently and permanently losing an article if
-      // extraction throws (rate limit, network error, interrupted run).
-      await markArticleSeen(article);
 
       for (const deal of deals) {
         if (!deal.stage || !STAGES.includes(deal.stage)) continue;
@@ -104,10 +100,17 @@ async function runScan(): Promise<NextResponse> {
 
         if (error) {
           stats.errors.push(`Upsert failed for ${deal.companyName}: ${error.message}`);
+          articleClean = false;
         } else {
           stats.targetsUpserted++;
         }
       }
+
+      // Only mark as seen once every deal in the article was actually saved
+      // — an article with a partial failure (e.g. one deal's upsert errors)
+      // needs to stay eligible for retry, since ignoreDuplicates makes
+      // re-processing the deals that already succeeded a safe no-op.
+      if (articleClean) await markArticleSeen(article);
     } catch (err) {
       stats.errors.push(`Extraction failed for ${article.url}: ${err instanceof Error ? err.message : String(err)}`);
     }
