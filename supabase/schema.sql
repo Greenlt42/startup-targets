@@ -31,7 +31,7 @@ create table if not exists targets (
   id uuid primary key default gen_random_uuid(),
   company_name text not null,
   website text,
-  sector text, -- deep tech | climate | defence | energy | biotech
+  sector text, -- deep tech | climate | defence | energy | biotech | fintech | health tech
   stage text,  -- pre-seed | seed | series-a
   round_size_usd numeric,
   round_date date,

@@ -16,6 +16,8 @@ const SECTOR_COLORS: Record<string, string> = {
   defence: "var(--sector-defence)",
   energy: "var(--sector-energy)",
   biotech: "var(--sector-biotech)",
+  fintech: "var(--sector-fintech)",
+  "health tech": "var(--sector-health-tech)",
 };
 
 const STAGE_LABELS: Record<string, string> = {

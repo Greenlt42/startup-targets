@@ -3,7 +3,7 @@ import { supabase } from "./supabase";
 export const STATUSES = ["new", "contacted", "dismissed"] as const;
 export type TargetStatus = (typeof STATUSES)[number];
 
-export const SECTOR_FILTERS = ["deep tech", "climate", "defence", "energy", "biotech"] as const;
+export const SECTOR_FILTERS = ["deep tech", "climate", "defence", "energy", "biotech", "fintech", "health tech"] as const;
 
 export interface Target {
   id: string;
