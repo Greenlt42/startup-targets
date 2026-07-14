@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { fetchFullArticleText, type Article } from "./feeds";
+import { fetchFullArticlePage, type Article } from "./feeds";
 import { extractDeals, STAGES } from "./extract";
 import { convertToUsd } from "./fx";
 import type { InvestorMatcher } from "./matchInvestors";
@@ -116,8 +116,14 @@ export async function processArticle(article: Article, matcher: InvestorMatcher,
   let articleClean = true;
   try {
     if (enriched.text.length < MIN_TEXT_LENGTH_BEFORE_FULL_FETCH) {
-      const fullText = await fetchFullArticleText(enriched.url);
-      if (fullText) enriched = { ...enriched, text: fullText };
+      const fullPage = await fetchFullArticlePage(enriched.url);
+      if (fullPage) {
+        enriched = {
+          ...enriched,
+          text: fullPage.text,
+          publishedAt: enriched.publishedAt ?? fullPage.publishedAt,
+        };
+      }
     }
 
     const deals = await extractDeals(enriched);
@@ -178,6 +184,7 @@ export async function processArticle(article: Article, matcher: InvestorMatcher,
           round_date: roundDate,
           investors: deal.investors,
           headcount: deal.headcount,
+          location: deal.location,
           source_url: enriched.url,
           source_name: enriched.sourceName,
           summary: deal.summary,
