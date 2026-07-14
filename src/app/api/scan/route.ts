@@ -18,10 +18,22 @@ export const maxDuration = 60;
 // confirmed live: against a 2-hourly cron, actual gaps between runs ranged
 // 1h20m–4h30m. A longer-than-expected gap means more of a backlog to work
 // through, and two consecutive runs got killed by FUNCTION_INVOCATION_TIMEOUT
-// as a result (2026-07-13). Capping articles-per-run keeps duration
-// predictable regardless of how much cron drifts or how large the backlog
-// gets — see the scannedAt logic below for how a capped run stays retryable.
+// as a result (2026-07-13). Capping articles-per-run was meant to keep
+// duration predictable — see the scannedAt logic below for how a capped run
+// stays retryable — but a fixed article count alone wasn't enough: confirmed
+// live (2026-07-14) that a run still hit FUNCTION_INVOCATION_TIMEOUT well
+// under the 25-article cap, because per-article time varies hugely with how
+// much AI-provider fallback cascading happens (each failed attempt in the
+// chain is real added latency). A wall-clock time budget targets the actual
+// constraint directly instead of using article count as an imperfect proxy
+// for it; the count cap stays on as a secondary bound.
 const MAX_ARTICLES_PER_RUN = 25;
+// The check only runs *between* articles, not during one — a single slow
+// article (multiple provider fallback attempts in sequence, each with its
+// own network round-trip) can still overshoot past this point before the
+// next check fires. 35s leaves real margin for that in-flight tail latency
+// on top of the ~15s already reserved for the final response/DB write.
+const TIME_BUDGET_MS = 35_000;
 
 // Triggered by a scheduled GitHub Actions workflow (.github/workflows/scan.yml)
 // hitting this route with a shared secret.
@@ -47,6 +59,8 @@ export async function POST(req: NextRequest) {
 }
 
 async function runScan(): Promise<NextResponse> {
+  const startTime = Date.now();
+
   const { data: state } = await supabase
     .from("scan_state")
     .select("last_scan_date")
@@ -76,11 +90,15 @@ async function runScan(): Promise<NextResponse> {
   // every source fair odds each run regardless of array position.
   const shuffled = [...newArticles].sort(() => Math.random() - 0.5);
   const articlesToProcess = shuffled.slice(0, MAX_ARTICLES_PER_RUN);
-  const capped = articlesToProcess.length < newArticles.length;
+  let capped = articlesToProcess.length < newArticles.length;
 
   const matcher = await loadInvestorMatcher();
 
   for (const article of articlesToProcess) {
+    if (Date.now() - startTime > TIME_BUDGET_MS) {
+      capped = true;
+      break;
+    }
     await processArticle(article, matcher, stats);
   }
 
