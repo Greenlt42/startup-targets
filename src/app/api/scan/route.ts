@@ -69,7 +69,13 @@ async function runScan(): Promise<NextResponse> {
   const newArticles = await excludeAlreadySeen(candidates);
   stats.newArticles = newArticles.length;
 
-  const articlesToProcess = newArticles.slice(0, MAX_ARTICLES_PER_RUN);
+  // Shuffle before capping — confirmed live: with feed sources concatenated
+  // before listing sources and a plain slice(0, N), any run where RSS alone
+  // produced ≥N new candidates gave a listing source (e.g. Scaling Europe,
+  // added 2026-07-14) zero chance of a slot, run after run. A shuffle gives
+  // every source fair odds each run regardless of array position.
+  const shuffled = [...newArticles].sort(() => Math.random() - 0.5);
+  const articlesToProcess = shuffled.slice(0, MAX_ARTICLES_PER_RUN);
   const capped = articlesToProcess.length < newArticles.length;
 
   const matcher = await loadInvestorMatcher();
