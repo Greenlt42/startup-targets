@@ -14,6 +14,15 @@ const FIRST_RUN_LOOKBACK_DAYS = 60;
 // runs (a handful of new articles) should comfortably fit in 60s.
 export const maxDuration = 60;
 
+// GitHub Actions' `schedule` trigger doesn't fire at exact intervals —
+// confirmed live: against a 2-hourly cron, actual gaps between runs ranged
+// 1h20m–4h30m. A longer-than-expected gap means more of a backlog to work
+// through, and two consecutive runs got killed by FUNCTION_INVOCATION_TIMEOUT
+// as a result (2026-07-13). Capping articles-per-run keeps duration
+// predictable regardless of how much cron drifts or how large the backlog
+// gets — see the scannedAt logic below for how a capped run stays retryable.
+const MAX_ARTICLES_PER_RUN = 25;
+
 // Triggered by a scheduled GitHub Actions workflow (.github/workflows/scan.yml)
 // hitting this route with a shared secret.
 export async function POST(req: NextRequest) {
@@ -59,21 +68,25 @@ async function runScan(): Promise<NextResponse> {
   const newArticles = await excludeAlreadySeen(candidates);
   stats.newArticles = newArticles.length;
 
+  const articlesToProcess = newArticles.slice(0, MAX_ARTICLES_PER_RUN);
+  const capped = articlesToProcess.length < newArticles.length;
+
   const matcher = await loadInvestorMatcher();
 
-  for (const article of newArticles) {
+  for (const article of articlesToProcess) {
     await processArticle(article, matcher, stats);
   }
 
-  // Only advance the cutoff on a clean run. If anything errored, leave
-  // last_scan_date where it was — the next run will re-fetch the same
-  // window, but dedup (seen_articles) already skips everything that
-  // succeeded, so only the articles that actually failed get retried.
+  // Only advance the cutoff on a clean, uncapped run. If anything errored,
+  // or we intentionally stopped short of the full backlog, leave
+  // last_scan_date where it was — the next run re-fetches the same window,
+  // but dedup (seen_articles) already skips everything that succeeded, so
+  // it just picks up the next batch until it finally catches up in full.
   let scannedAt: string | null = null;
-  if (stats.errors.length === 0) {
+  if (stats.errors.length === 0 && !capped) {
     scannedAt = new Date().toISOString();
     await supabase.from("scan_state").update({ last_scan_date: scannedAt }).eq("id", 1);
   }
 
-  return NextResponse.json({ ok: true, previousScanDate: state?.last_scan_date ?? null, scannedAt, stats });
+  return NextResponse.json({ ok: true, previousScanDate: state?.last_scan_date ?? null, scannedAt, capped, stats });
 }
