@@ -118,6 +118,7 @@ export default async function Home({
                 style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--gridline)" }}
               >
                 <Th>Company</Th>
+                <Th>Location</Th>
                 <Th>Sector</Th>
                 <Th>Stage</Th>
                 <Th>Round</Th>
@@ -190,6 +191,9 @@ function TargetRow({ target }: { target: Target }) {
             {target.summary}
           </div>
         )}
+      </td>
+      <td className="px-4 py-3 align-top text-xs whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
+        {target.location ?? "—"}
       </td>
       <td className="px-4 py-3 align-top">
         {target.sector && (

@@ -13,6 +13,7 @@ export interface ExtractedDeal {
   roundDate: string | null; // YYYY-MM-DD
   investors: string[];
   headcount: number | null;
+  location: string | null;
   summary: string;
 }
 
@@ -64,6 +65,10 @@ Each object must have exactly these fields:
     (use the names as written in the article, full firm names where given),
   "headcount": number or null (only if the article explicitly states company
     headcount/team size — do not guess),
+  "location": string or null — the company's HQ as "City, Country" (e.g.
+    "London, UK", "Berlin, Germany"). Use only what the article states
+    explicitly (a dateline, "London-based", "headquartered in Berlin", etc.)
+    — do not guess from country-specific language or currency alone.
   "summary": one-sentence plain description of what the company does
 }
 
@@ -173,6 +178,7 @@ export async function extractDeals(
       website: nullableString(deal.website),
       roundCurrency: nullableString(deal.roundCurrency),
       roundDate: nullableString(deal.roundDate),
+      location: nullableString(deal.location),
     };
   });
 
@@ -184,6 +190,7 @@ export async function extractDeals(
     roundAmount: typeof d.roundAmount === "number" ? d.roundAmount : null,
     roundCurrency: d.roundCurrency,
     roundDate: d.roundDate,
+    location: d.location,
     investors: d.investors.filter((i): i is string => typeof i === "string"),
     headcount: typeof d.headcount === "number" ? d.headcount : null,
     summary: typeof d.summary === "string" ? d.summary : "",

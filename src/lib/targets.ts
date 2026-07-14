@@ -15,6 +15,7 @@ export interface Target {
   round_date: string | null;
   investors: string[];
   headcount: number | null;
+  location: string | null;
   source_url: string | null;
   source_name: string | null;
   summary: string | null;

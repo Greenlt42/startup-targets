@@ -37,6 +37,7 @@ create table if not exists targets (
   round_date date,
   investors text[] default '{}',
   headcount int, -- often null; may require manual fallback lookup
+  location text, -- company HQ, "City, Country" as stated in the article — often null
   source_url text,
   source_name text,
   summary text,
@@ -47,6 +48,10 @@ create table if not exists targets (
   updated_at timestamptz not null default now(),
   unique (company_name, round_date)
 );
+
+-- Safe to re-run: adds the column if this ran against a database created
+-- before `location` existed on the create table statement above.
+alter table targets add column if not exists location text;
 
 create index if not exists targets_status_idx on targets (status);
 create index if not exists targets_sector_idx on targets (sector);
