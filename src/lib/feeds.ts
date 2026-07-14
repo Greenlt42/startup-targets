@@ -1,6 +1,6 @@
 import Parser from "rss-parser";
 import * as cheerio from "cheerio";
-import { NEWS_SOURCES } from "./sources";
+import { NEWS_SOURCES, LISTING_SOURCES } from "./sources";
 
 const FETCH_HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" };
 
@@ -19,14 +19,27 @@ const FETCH_HEADERS = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10
 // whichever selector happens to match first.
 const CONTENT_SELECTORS = ["article", ".entry-content", ".post-content", ".article-content", ".article-body", "main"];
 
-export async function fetchFullArticleText(url: string): Promise<string | null> {
+export interface FullArticlePage {
+  text: string;
+  publishedAt: Date | null;
+}
+
+// Fetches a full article page: main-content text (see CONTENT_SELECTORS
+// above) plus a publish date opportunistically parsed from embedded
+// Schema.org JSON-LD (`"datePublished":"..."`) where present — confirmed
+// present on Scaling Europe's article pages, common on many modern sites.
+// Returns null if the page can't be fetched or nothing substantial matches.
+export async function fetchFullArticlePage(url: string): Promise<FullArticlePage | null> {
   try {
     const res = await fetch(url, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(10000) });
     if (!res.ok) return null;
     const html = await res.text();
     const $ = cheerio.load(html);
-    $("script, style, nav, header, footer, aside, .ad, .advertisement").remove();
 
+    const dateMatch = html.match(/"datePublished"\s*:\s*"([^"]+)"/);
+    const publishedAt = dateMatch ? new Date(dateMatch[1]) : null;
+
+    $("script, style, nav, header, footer, aside, .ad, .advertisement").remove();
     let best = "";
     for (const selector of CONTENT_SELECTORS) {
       $(selector).each((_, el) => {
@@ -34,9 +47,9 @@ export async function fetchFullArticleText(url: string): Promise<string | null> 
         if (text.length > best.length) best = text;
       });
     }
-    return best.length > 200 ? best : null;
+    return best.length > 200 ? { text: best, publishedAt: publishedAt && !isNaN(+publishedAt) ? publishedAt : null } : null;
   } catch (err) {
-    console.error(`Failed to fetch full article text for ${url}:`, err instanceof Error ? err.message : err);
+    console.error(`Failed to fetch full article page for ${url}:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -96,6 +109,48 @@ export async function fetchAllArticles(): Promise<Article[]> {
       articles.push(...result.value);
     } else {
       console.error(`Failed to fetch feed ${NEWS_SOURCES[i].name}:`, result.reason);
+    }
+  });
+  return articles;
+}
+
+// For sources with no RSS feed at all (e.g. Scaling Europe — a client-
+// rendered SPA where /feed just returns the homepage shell, but the
+// dispatches listing page does embed real article links server-side).
+// Only extracts URLs here — title/text/publishedAt are left empty so
+// processArticle's existing "thin content" full-page-fetch enrichment
+// (see pipeline.ts) picks up the real text and JSON-LD publish date, but
+// only for articles that pass the seen_articles dedup check first. This
+// avoids fetching every listed article's full page on every run — only
+// genuinely new ones ever get fetched.
+export async function fetchAllListingSourceArticles(): Promise<Article[]> {
+  const results = await Promise.allSettled(
+    LISTING_SOURCES.map(async (source) => {
+      const res = await fetch(source.listingUrl, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+
+      const urls = new Set<string>();
+      Array.from(html.matchAll(source.linkPattern)).forEach((m) => urls.add(m[0]));
+
+      return Array.from(urls).map(
+        (url): Article => ({
+          sourceName: source.name,
+          url,
+          title: "",
+          publishedAt: null,
+          text: "",
+        })
+      );
+    })
+  );
+
+  const articles: Article[] = [];
+  results.forEach((result, i) => {
+    if (result.status === "fulfilled") {
+      articles.push(...result.value);
+    } else {
+      console.error(`Failed to fetch listing source ${LISTING_SOURCES[i].name}:`, result.reason);
     }
   });
   return articles;

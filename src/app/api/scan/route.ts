@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { fetchAllArticles } from "@/lib/feeds";
+import { fetchAllArticles, fetchAllListingSourceArticles } from "@/lib/feeds";
 import { loadInvestorMatcher } from "@/lib/matchInvestors";
 import { newScanStats, excludeAlreadySeen, processArticle } from "@/lib/pipeline";
 
@@ -59,7 +59,8 @@ async function runScan(): Promise<NextResponse> {
 
   const stats = { fetched: 0, withinWindow: 0, newArticles: 0, ...newScanStats() };
 
-  const allArticles = await fetchAllArticles();
+  const [feedArticles, listingArticles] = await Promise.all([fetchAllArticles(), fetchAllListingSourceArticles()]);
+  const allArticles = [...feedArticles, ...listingArticles];
   stats.fetched = allArticles.length;
 
   const candidates = allArticles.filter((a) => a.publishedAt === null || a.publishedAt >= cutoff);
