@@ -47,6 +47,16 @@ or a regulated financial/clinical product — or does it describe generic
 software/services/workforce operations that happen to have that industry as a
 customer? If the latter, skip it.
 
+The sector field must be EXACTLY one of the seven listed above — never a
+close-sounding substitute. A company in a different "-tech" niche not on
+this list (edtech, proptech, foodtech, insurtech, legaltech, martech, adtech,
+etc.) does NOT belong in any of the seven, even if it looks superficially
+similar to one (e.g. an AI-powered STUDY or LEARNING app is edtech, not
+health tech, even though it might use words like "engagement" or involve
+young users — do not force it into the nearest category). If a company
+doesn't cleanly fit one of the seven, exclude the deal from the array
+entirely rather than guessing the closest-sounding one.
+
 Skip rounds in unrelated sectors (e.g. consumer apps, martech, e-commerce)
 entirely — do not include them in the array.
 
@@ -65,10 +75,20 @@ Each object must have exactly these fields:
     (use the names as written in the article, full firm names where given),
   "headcount": number or null (only if the article explicitly states company
     headcount/team size — do not guess),
-  "location": string or null — the company's HQ as "City, Country" (e.g.
-    "London, UK", "Berlin, Germany"). Use only what the article states
-    explicitly (a dateline, "London-based", "headquartered in Berlin", etc.)
-    — do not guess from country-specific language or currency alone.
+  "location": string or null — the company's HQ. Read the ENTIRE article
+    carefully for this, not just the opening sentence — it's often stated
+    only once, sometimes well into the piece, and easy to miss. Look for
+    ANY of: a dateline; "[City]-based"; "headquartered in [City]";
+    "the [nationality] startup/company" (e.g. "the German startup", "the
+    UK-based company"); "founded in [City]"; a founder or the company
+    described as being "from [City/Country]"; or a company name followed by
+    a parenthetical city. Prefer "City, Country" when both are stated (e.g.
+    "London, UK"), but a country or nationality alone (e.g. "Germany", or
+    inferred directly from "the German startup") is still worth capturing —
+    use just that rather than returning null. Only return null if the
+    article genuinely gives no location cue of any kind anywhere in the
+    text — do not guess from currency, investor nationality, or the
+    publication's own regional focus.
   "summary": one-sentence plain description of what the company does
 }
 
@@ -152,7 +172,7 @@ export async function extractDeals(
   const prompt = PROMPT_HEADER
     .replace("{{SOURCE}}", article.sourceName)
     .replace("{{PUBLISHED}}", article.publishedAt?.toISOString().slice(0, 10) ?? "unknown")
-    .replace("{{ARTICLE}}", article.text.slice(0, 6000));
+    .replace("{{ARTICLE}}", article.text.slice(0, 9000));
 
   const raw = await generateText(prompt);
 
