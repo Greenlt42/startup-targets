@@ -67,7 +67,12 @@ Each object must have exactly these fields:
   "sector": one of "deep tech" | "climate" | "defence" | "energy" | "biotech" | "fintech" | "health tech",
   "stage": one of "pre-seed" | "seed" | "series-a" | null (null if the article
     doesn't specify or it's a different stage, e.g. Series B or growth),
-  "roundAmount": number or null (the numeric amount only, e.g. 5.25, not "£5.25M"),
+  "roundAmount": number or null — ALWAYS expressed in millions, regardless of
+    what unit the article uses. "$5M" -> 5. "$5.25M" -> 5.25. "£500K" -> 0.5.
+    "$1.7B" -> 1700 (billions × 1000 — do NOT just strip the unit and keep
+    the bare number; a billion-dollar figure written as "1.7" instead of
+    "1700" is a 1000x understatement and will let a way-oversized round
+    slip through a downstream $-amount cap). "€2,000,000" -> 2.
   "roundCurrency": ISO currency code or null (e.g. "USD", "EUR", "GBP"),
   "roundDate": "YYYY-MM-DD" or null (use the article's publish date if the
     article doesn't state an exact round date),
@@ -91,10 +96,6 @@ Each object must have exactly these fields:
     publication's own regional focus.
   "summary": one-sentence plain description of what the company does
 }
-
-Note: roundAmount is in whatever unit is stated (if the article says "$5M",
-roundAmount is 5, not 5000000 — always treat the stated figure as millions
-unless it's explicitly a different unit).
 
 Respond with ONLY the JSON array, no other text, no markdown code fences.
 
