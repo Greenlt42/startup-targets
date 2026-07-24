@@ -7,6 +7,7 @@ import {
   type Target,
 } from "@/lib/targets";
 import { setTargetStatus, setTargetRead } from "./actions";
+import { CompanyLink } from "./CompanyLink";
 
 export const dynamic = "force-dynamic";
 
@@ -201,9 +202,9 @@ function TargetRow({ target }: { target: Target }) {
       <td className="px-4 py-3 align-top">
         <div className="font-medium" style={{ color: "var(--text-primary)" }}>
           {target.source_url ? (
-            <a href={target.source_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+            <CompanyLink id={target.id} href={target.source_url} isRead={read}>
               {target.company_name}
-            </a>
+            </CompanyLink>
           ) : (
             target.company_name
           )}
