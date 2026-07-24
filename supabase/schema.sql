@@ -42,6 +42,7 @@ create table if not exists targets (
   source_name text,
   summary text,
   status text not null default 'new', -- new | contacted | dismissed
+  is_read boolean not null default false, -- independent of status: "have I looked at this yet"
   contact_name text, -- filled in later via manual LinkedIn lookup
   contact_linkedin_url text,
   created_at timestamptz not null default now(),
@@ -50,12 +51,14 @@ create table if not exists targets (
 );
 
 -- Safe to re-run: adds the column if this ran against a database created
--- before `location` existed on the create table statement above.
+-- before these existed on the create table statement above.
 alter table targets add column if not exists location text;
+alter table targets add column if not exists is_read boolean not null default false;
 
 create index if not exists targets_status_idx on targets (status);
 create index if not exists targets_sector_idx on targets (sector);
 create index if not exists targets_round_date_idx on targets (round_date);
+create index if not exists targets_is_read_idx on targets (is_read);
 
 -- RLS is enabled with no policies attached. The app only ever accesses these
 -- tables server-side via the service_role key (src/lib/supabase.ts), which
