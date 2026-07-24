@@ -23,6 +23,7 @@ export interface ScanStats {
     noCurrencyForStatedAmount: number; // amount given but currency missing
     unrecognizedCurrency: number; // currency not in our FX table
     roundTooLarge: number; // over the $50M cap
+    possibleUnitError: number; // article mentions "billion"/"bn" near the company but roundAmount looks small — likely a missed ×1000
     noDate: number; // couldn't determine a round_date at all
     duplicateAcrossSources: number; // same company (case-insensitive) + a round_date within days, different source
   };
@@ -40,6 +41,7 @@ export function newScanStats(): ScanStats {
       noCurrencyForStatedAmount: 0,
       unrecognizedCurrency: 0,
       roundTooLarge: 0,
+      possibleUnitError: 0,
       noDate: 0,
       duplicateAcrossSources: 0,
     },
@@ -71,6 +73,26 @@ async function hasDuplicateTarget(companyName: string, roundDate: string): Promi
 
   if (error) throw error;
   return (data ?? []).length > 0;
+}
+
+// Defense-in-depth against a unit-conversion miss: confirmed live, an
+// article headlined "raises $1.7B" got extracted as roundAmount 1.7 (i.e.
+// $1.7M once converted) instead of 1700 — the prompt's "always express in
+// millions" instruction wasn't followed for a billion-scale figure, and
+// since the $50M cap is applied to the (wrongly small) converted value, a
+// genuinely huge round slipped straight through it. Prompt wording was
+// fixed with explicit worked examples, but a hard business rule like the
+// round-size cap shouldn't rely solely on the model getting this right
+// every time. Checks for "billion"/"bn" within a window around the
+// company's first mention (not the whole article) so a small deal
+// correctly extracted from a multi-company round-up piece that separately
+// mentions someone else's billion-dollar round isn't wrongly flagged.
+const BILLION_MENTION_WINDOW = 300;
+
+function mentionsBillionNearCompany(text: string, companyName: string): boolean {
+  const idx = text.toLowerCase().indexOf(companyName.toLowerCase());
+  const window = idx === -1 ? text : text.slice(Math.max(0, idx - BILLION_MENTION_WINDOW), idx + BILLION_MENTION_WINDOW);
+  return /\bbillion\b|\b\d+(\.\d+)?\s?bn\b/i.test(window);
 }
 
 const SEEN_CHECK_BATCH_SIZE = 100;
@@ -155,6 +177,10 @@ export async function processArticle(article: Article, matcher: InvestorMatcher,
         roundSizeUsd = convertToUsd(deal.roundAmount, deal.roundCurrency);
         if (roundSizeUsd === null) {
           stats.rejections.unrecognizedCurrency++;
+          continue;
+        }
+        if (roundSizeUsd <= MAX_ROUND_SIZE_USD && mentionsBillionNearCompany(enriched.text, deal.companyName)) {
+          stats.rejections.possibleUnitError++;
           continue;
         }
         if (roundSizeUsd > MAX_ROUND_SIZE_USD) {
