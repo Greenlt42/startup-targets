@@ -1,12 +1,12 @@
 import {
   fetchTargets,
-  fetchStatusCounts,
+  fetchCounts,
   SECTOR_FILTERS,
   STATUSES,
   type TargetStatus,
   type Target,
 } from "@/lib/targets";
-import { setTargetStatus } from "./actions";
+import { setTargetStatus, setTargetRead } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -50,11 +50,15 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function hrefWith(current: { status?: string; sector?: string }, changes: { status?: string; sector?: string }): string {
+function hrefWith(
+  current: { status?: string; sector?: string; unread?: boolean },
+  changes: { status?: string; sector?: string; unread?: boolean }
+): string {
   const merged = { ...current, ...changes };
   const params = new URLSearchParams();
   if (merged.status) params.set("status", merged.status);
   if (merged.sector) params.set("sector", merged.sector);
+  if (merged.unread) params.set("unread", "1");
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
@@ -62,16 +66,17 @@ function hrefWith(current: { status?: string; sector?: string }, changes: { stat
 export default async function Home({
   searchParams,
 }: {
-  searchParams: { status?: string; sector?: string };
+  searchParams: { status?: string; sector?: string; unread?: string };
 }) {
   const status = STATUSES.includes(searchParams.status as TargetStatus) ? (searchParams.status as TargetStatus) : undefined;
   const sector = SECTOR_FILTERS.includes(searchParams.sector as (typeof SECTOR_FILTERS)[number])
     ? (searchParams.sector as (typeof SECTOR_FILTERS)[number])
     : undefined;
+  const unreadOnly = searchParams.unread === "1";
 
-  const [targets, counts] = await Promise.all([fetchTargets({ status, sector }), fetchStatusCounts()]);
+  const [targets, counts] = await Promise.all([fetchTargets({ status, sector, unreadOnly }), fetchCounts()]);
   const total = counts.new + counts.contacted + counts.dismissed;
-  const current = { status, sector };
+  const current = { status, sector, unread: unreadOnly };
 
   return (
     <main className="min-h-screen p-6 sm:p-10 max-w-6xl mx-auto">
@@ -84,15 +89,21 @@ export default async function Home({
         </p>
       </header>
 
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <section className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
         <StatTile label="Total" value={total} />
-        <StatTile label="New" value={counts.new} accent="var(--status-accent)" />
+        <StatTile label="Unread" value={counts.unread} accent="var(--status-accent)" />
+        <StatTile label="New" value={counts.new} />
         <StatTile label="Contacted" value={counts.contacted} accent="var(--status-good)" />
         <StatTile label="Dismissed" value={counts.dismissed} accent="var(--status-muted)" />
       </section>
 
+      <nav className="flex flex-wrap gap-2 mb-3" aria-label="Filter by read state">
+        <FilterPill href={hrefWith(current, { unread: false })} active={!unreadOnly} label="All" />
+        <FilterPill href={hrefWith(current, { unread: true })} active={unreadOnly} label="Unread only" />
+      </nav>
+
       <nav className="flex flex-wrap gap-2 mb-3" aria-label="Filter by status">
-        <FilterPill href={hrefWith(current, { status: undefined })} active={!status} label="All" />
+        <FilterPill href={hrefWith(current, { status: undefined })} active={!status} label="All statuses" />
         {STATUSES.map((s) => (
           <FilterPill key={s} href={hrefWith(current, { status: s })} active={status === s} label={STATUS_LABELS[s]} />
         ))}
@@ -117,6 +128,7 @@ export default async function Home({
                 className="text-left"
                 style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--gridline)" }}
               >
+                <Th></Th>
                 <Th>Company</Th>
                 <Th>Location</Th>
                 <Th>Sector</Th>
@@ -169,13 +181,23 @@ function FilterPill({ href, active, label, dot }: { href: string; active: boolea
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children }: { children?: React.ReactNode }) {
   return <th className="px-4 py-2.5 font-medium text-xs">{children}</th>;
 }
 
 function TargetRow({ target }: { target: Target }) {
+  const read = target.is_read;
   return (
-    <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
+    <tr style={{ borderBottom: "1px solid var(--gridline)", opacity: read ? 0.6 : 1 }}>
+      <td className="pl-4 py-3 align-top">
+        {!read && (
+          <span
+            className="block w-2 h-2 rounded-full mt-1.5"
+            style={{ background: "var(--status-accent)" }}
+            title="Unread"
+          />
+        )}
+      </td>
       <td className="px-4 py-3 align-top">
         <div className="font-medium" style={{ color: "var(--text-primary)" }}>
           {target.source_url ? (
@@ -223,6 +245,11 @@ function TargetRow({ target }: { target: Target }) {
       </td>
       <td className="px-4 py-3 align-top">
         <div className="flex flex-wrap gap-1.5">
+          {read ? (
+            <ActionButton action={setTargetRead.bind(null, target.id, false)} label="Mark unread" />
+          ) : (
+            <ActionButton action={setTargetRead.bind(null, target.id, true)} label="Mark read" />
+          )}
           {target.status !== "contacted" && (
             <ActionButton action={setTargetStatus.bind(null, target.id, "contacted")} label="Mark contacted" />
           )}
