@@ -35,30 +35,12 @@ body {
   color: var(--text-primary);
 }
 
-.chevron {
+.chevron-icon {
   transition: transform 300ms ease;
 }
 
-details[open] > summary .chevron {
+[aria-expanded="true"] .chevron-icon {
   transform: rotate(180deg);
-}
-
-/* Smooth accordion open/close — verygoodfilms' 250-400ms reveal, ported to
-   native <details> via the standard ::details-content pseudo-element. */
-:root {
-  interpolate-size: allow-keywords;
-}
-
-details::details-content {
-  opacity: 0;
-  block-size: 0;
-  overflow-y: clip;
-  transition: content-visibility 300ms allow-discrete, opacity 300ms ease, block-size 300ms ease;
-}
-
-details[open]::details-content {
-  opacity: 1;
-  block-size: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
