@@ -14,7 +14,10 @@ export function CompanyLink({ id, href, isRead, children }: { id: string; href: 
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="hover:underline"
+      className="hover:underline transition-colors"
+      style={{ textDecorationColor: "var(--accent)" }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-hover)")}
+      onMouseLeave={(e) => (e.currentTarget.style.color = "")}
       onClick={() => {
         if (!isRead) setTargetRead(id, true);
       }}
