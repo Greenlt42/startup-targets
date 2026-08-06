@@ -8,6 +8,7 @@ import {
 } from "@/lib/targets";
 import { setTargetStatus, setTargetRead } from "./actions";
 import { CompanyLink } from "./CompanyLink";
+import { Accordion } from "./Accordion";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +101,7 @@ export default async function Home({
             Startup Targets
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Newly-funded deep tech, climate, defence, energy &amp; biotech startups worth a recruiting message.
+            Newly-funded deep tech, climate, defence, energy &amp; biotech startups with raises less than $50M.
           </p>
         </header>
 
@@ -230,7 +231,7 @@ function RoundInfo({ target }: { target: Target }) {
 
 function Chevron() {
   return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="chevron justify-self-end shrink-0" style={{ color: "var(--text-muted)" }} aria-hidden="true">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="chevron-icon justify-self-end shrink-0" style={{ color: "var(--text-muted)" }} aria-hidden="true">
       <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -248,69 +249,73 @@ function TargetRow({ target }: { target: Target }) {
   );
 
   return (
-    <details style={{ borderBottom: "1px solid var(--gridline)" }}>
-      <summary className="cursor-pointer list-none px-6 sm:px-10 py-3 transition-colors hover:bg-[var(--surface-1)] [&::-webkit-details-marker]:hidden">
-        {/* Below md: stacked card-style header */}
-        <div className="md:hidden">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="font-medium" style={{ color: "var(--text-primary)" }}>
+    <div style={{ borderBottom: "1px solid var(--gridline)" }}>
+      <Accordion
+        summary={
+          <div className="px-6 sm:px-10 py-3">
+            {/* Below md: stacked card-style header */}
+            <div className="md:hidden">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium" style={{ color: "var(--text-primary)" }}>
+                    {name}
+                  </div>
+                  {loc && (
+                    <div className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                      {loc.key}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <StatusBadge target={target} />
+                  <Chevron />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
+                <SectorTag sector={target.sector} />
+                {target.stage && <span style={{ color: "var(--text-secondary)" }}>{STAGE_LABELS[target.stage] ?? target.stage}</span>}
+                <RoundInfo target={target} />
+              </div>
+            </div>
+
+            {/* md and up: table-style grid row */}
+            <div className="hidden md:grid items-center gap-x-4 text-sm" style={{ gridTemplateColumns: ROW_GRID }}>
+              <div className="font-medium truncate" style={{ color: "var(--text-primary)" }}>
                 {name}
               </div>
-              {loc && (
-                <div className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                  {loc.key}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
+              <div className="truncate" style={{ color: "var(--text-secondary)" }}>
+                {loc?.key ?? "—"}
+              </div>
+              <SectorTag sector={target.sector} />
+              <div style={{ color: "var(--text-secondary)" }}>{target.stage ? STAGE_LABELS[target.stage] ?? target.stage : "—"}</div>
+              <RoundInfo target={target} />
               <StatusBadge target={target} />
               <Chevron />
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
-            <SectorTag sector={target.sector} />
-            {target.stage && <span style={{ color: "var(--text-secondary)" }}>{STAGE_LABELS[target.stage] ?? target.stage}</span>}
-            <RoundInfo target={target} />
+        }
+      >
+        <div className="px-6 sm:px-10 pb-4 pt-3">
+          {target.summary && <DetailSection title="Company overview">{target.summary}</DetailSection>}
+          <DetailSection title="Locations">
+            {loc ? (
+              <ul className="space-y-0.5">
+                <li>{loc.key}</li>
+                {loc.extra.map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            ) : (
+              "—"
+            )}
+          </DetailSection>
+          <DetailSection title="Investors">{target.investors.length > 0 ? target.investors.join(", ") : "—"}</DetailSection>
+          <div className="mt-4">
+            <TargetActions target={target} read={read} />
           </div>
         </div>
-
-        {/* md and up: table-style grid row */}
-        <div className="hidden md:grid items-center gap-x-4 text-sm" style={{ gridTemplateColumns: ROW_GRID }}>
-          <div className="font-medium truncate" style={{ color: "var(--text-primary)" }}>
-            {name}
-          </div>
-          <div className="truncate" style={{ color: "var(--text-secondary)" }}>
-            {loc?.key ?? "—"}
-          </div>
-          <SectorTag sector={target.sector} />
-          <div style={{ color: "var(--text-secondary)" }}>{target.stage ? STAGE_LABELS[target.stage] ?? target.stage : "—"}</div>
-          <RoundInfo target={target} />
-          <StatusBadge target={target} />
-          <Chevron />
-        </div>
-      </summary>
-
-      <div className="px-6 sm:px-10 pb-4 pt-3">
-        {target.summary && <DetailSection title="Company overview">{target.summary}</DetailSection>}
-        <DetailSection title="Locations">
-          {loc ? (
-            <ul className="space-y-0.5">
-              <li>{loc.key}</li>
-              {loc.extra.map((l) => (
-                <li key={l}>{l}</li>
-              ))}
-            </ul>
-          ) : (
-            "—"
-          )}
-        </DetailSection>
-        <DetailSection title="Investors">{target.investors.length > 0 ? target.investors.join(", ") : "—"}</DetailSection>
-        <div className="mt-4">
-          <TargetActions target={target} read={read} />
-        </div>
-      </div>
-    </details>
+      </Accordion>
+    </div>
   );
 }
 
