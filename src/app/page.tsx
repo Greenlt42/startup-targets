@@ -101,7 +101,7 @@ export default async function Home({
             Startup Targets
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Newly-funded deep tech, climate, defence, energy, biotech, fintech &amp; health tech startups with raises less than $50M.
+            Newly-funded deep tech, climate, defence, energy, biotech, fintech &amp; health tech startups in the UK and EU with raises less than $50M.
           </p>
         </header>
 
