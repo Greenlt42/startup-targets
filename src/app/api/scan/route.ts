@@ -6,6 +6,20 @@ import { newScanStats, excludeAlreadySeen, processArticle } from "@/lib/pipeline
 
 const FIRST_RUN_LOOKBACK_DAYS = 60;
 
+// Safety margin for the incremental cutoff: an article's publishedAt is
+// supposed to reliably predict when it becomes visible in the feed, but
+// CMS republishing/backdating can violate that — confirmed live 2026-08-14,
+// EU-Startups' Mindgard article carried publishedAt Aug 13 07:34 but didn't
+// actually appear in the feed until Aug 14, by which point the prior clean
+// run had already advanced last_scan_date past it, permanently excluding
+// it from every future scan's withinWindow filter (it was never in
+// seen_articles either, so dedup wouldn't have caught it — it just fell
+// through). Capping the cutoff to at most this many days behind "now"
+// bounds that exposure. Cheap to do: the wider candidate pool only costs
+// extra seen_articles lookups, not extra AI extraction, since
+// excludeAlreadySeen filters already-processed articles out first.
+const CUTOFF_SAFETY_LOOKBACK_DAYS = 3;
+
 // 60s is the max Vercel allows on the Hobby plan (Pro allows up to 300s).
 // Real runs have taken well over this when processing a large backlog (e.g.
 // the initial catch-up, or a day with heavy AI-provider fallback) — that
@@ -67,9 +81,11 @@ async function runScan(): Promise<NextResponse> {
     .eq("id", 1)
     .single();
 
-  const cutoff = state?.last_scan_date
+  const rawCutoff = state?.last_scan_date
     ? new Date(state.last_scan_date)
     : new Date(Date.now() - FIRST_RUN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const safetyFloor = new Date(Date.now() - CUTOFF_SAFETY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const cutoff = rawCutoff < safetyFloor ? rawCutoff : safetyFloor;
 
   const stats = { fetched: 0, withinWindow: 0, newArticles: 0, ...newScanStats() };
 
