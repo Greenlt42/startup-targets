@@ -42,7 +42,54 @@ already-qualified company.
   per-target actions (mark contacted/dismissed/reopen) via Next.js Server Actions
   (`src/app/actions.ts`)
 
-## Setup
+## Quick start (fork and run your own)
+
+You need free accounts at [Supabase](https://supabase.com), [Groq](https://console.groq.com)
+(and optionally [Google AI Studio](https://aistudio.google.com) for Gemini),
+[Vercel](https://vercel.com) and GitHub. Node 18+.
+
+1. **Fork/clone** this repo and run `npm install`.
+2. **Supabase:** create a project, then in the SQL editor run `supabase/schema.sql`
+   followed by `supabase/seed_investors.sql`. Copy the project URL and the
+   `service_role` key (Project Settings → API).
+3. **Env vars:** `cp .env.example .env.local` and fill in:
+
+   | Variable | Where to get it |
+   | --- | --- |
+   | `SUPABASE_URL` | Supabase project URL |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API (**server-only, never commit or expose**) |
+   | `GROQ_API_KEY` | Groq console |
+   | `GOOGLE_AI_API_KEY` | Google AI Studio (optional fallback) |
+   | `SCAN_WEBHOOK_SECRET` | Any long random string, e.g. `openssl rand -hex 32` |
+
+4. **Run locally:** `npm run dev`, then trigger a scan:
+   `curl -X POST http://localhost:3000/api/scan -H "Authorization: Bearer $SCAN_WEBHOOK_SECRET"`
+   (use a generous timeout; the first run has the most to process).
+5. **Deploy:** `vercel --prod`, add the same env vars in the Vercel project settings.
+6. **Schedule:** in your GitHub repo set Actions secret `SCAN_WEBHOOK_SECRET` and
+   variable `SCAN_URL` (your Vercel URL). See [Cron](#cron).
+
+`.env.local` is git-ignored. Only `.env.example` (blank placeholders) is committed.
+
+## Changing parameters
+
+| What to change | Where |
+| --- | --- |
+| Target sectors | `SECTORS` in `src/lib/extract.ts` and `SECTOR_FILTERS` in `src/lib/targets.ts` (keep in sync), the sector list in the prompt in `extract.ts`, and the comment in `supabase/schema.sql` |
+| Funding stages | `STAGES` in `src/lib/extract.ts` (plus the stage wording in its prompt and the `stage` check in `supabase/schema.sql`, if any) |
+| Max round size / headcount | `MAX_ROUND_SIZE_USD`, `MAX_HEADCOUNT` in `src/lib/pipeline.ts` |
+| Geography (UK/EU) | The extraction prompt in `src/lib/extract.ts` and the `region` weighting in `supabase/seed_investors.sql` |
+| Investor allowlist | The `investors` table in Supabase (edit rows directly), or `supabase/seed_investors.sql` |
+| News sources | `NEWS_SOURCES` (RSS) and `LISTING_SOURCES` (HTML pages) in `src/lib/sources.ts` |
+| Scan frequency | `cron` in `.github/workflows/scan.yml` |
+| Per-run limits | `MAX_ARTICLES_PER_RUN`, `TIME_BUDGET_MS`, `FIRST_RUN_LOOKBACK_DAYS`, `CUTOFF_SAFETY_LOOKBACK_DAYS` in `src/app/api/scan/route.ts` |
+| AI models / fallback order | `src/lib/ai.ts` |
+| Reprocess after changing filters | `npx tsx scripts/reprocess-recent.ts` |
+
+After changing the filters, check the `stats.rejections` counts in the `/api/scan`
+JSON response to see where candidates are being dropped.
+
+## Setup (details)
 
 ```bash
 npm install

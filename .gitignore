@@ -38,3 +38,7 @@ next-env.d.ts
 # claude code local settings
 .claude/settings.local.json
 .env*
+!.env.example
+
+# local design reference, not published
+/verygoodfilms-design/
